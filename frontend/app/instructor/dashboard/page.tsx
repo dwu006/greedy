@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Users, Clock, Plus, Leaf, CalendarDays } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { useState } from "react"
+import CreateClassPopup from "@/components/CreateClassPopup"
 
 // Sample class data - updated to include URL-safe slugs
 const classes = [
@@ -35,6 +37,7 @@ const classes = [
 ]
 
 export default function InstructorDashboard() {
+  const [showCreate, setShowCreate] = useState(false);
   return (
     <div className="container mx-auto p-6 max-w-6xl grid-dots-bg min-h-screen">
       <motion.div
@@ -43,8 +46,8 @@ export default function InstructorDashboard() {
         transition={{ duration: 0.4 }}
         className="mb-8"
       >
-        <h1 className="text-3xl font-marcellus text-forest-800">My Classes</h1>
-        <p className="text-forest-600 mt-1 font-nunito">Manage your curriculum and students</p>
+        <h1 className="text-3xl font-jakarta font-semibold text-forest-800">My Classes</h1>
+        <p className="text-forest-600 mt-1 font-inter">Manage your curriculum and students</p>
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -60,19 +63,19 @@ export default function InstructorDashboard() {
             <Card className="h-full overflow-hidden border-none shadow-md hover:shadow-lg transition-shadow duration-300 bg-white/90">
               <CardHeader className="bg-gradient-to-r from-forest-100 to-leaf-50 pb-2">
                 <div className="flex justify-between items-start">
-                  <CardTitle className="text-xl font-marcellus text-forest-800">{cls.name}</CardTitle>
+                  <CardTitle className="text-xl font-jakarta font-semibold text-forest-800">{cls.name}</CardTitle>
                   <Leaf className="h-5 w-5 text-forest-500 animate-leaf-sway" />
                 </div>
-                <CardDescription className="flex items-center text-forest-600 font-nunito">
+                <CardDescription className="flex items-center text-forest-600 font-inter">
                   <Users className="mr-1 h-4 w-4" />
                   {cls.students} students
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-4">
-                <p className="text-forest-600 font-nunito text-sm mb-4 line-clamp-2">{cls.description}</p>
+                <p className="text-forest-600 font-inter text-sm mb-4 line-clamp-2">{cls.description}</p>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-forest-600 flex items-center font-nunito">
+                    <span className="text-forest-600 flex items-center font-inter">
                       <Clock className="mr-1 h-4 w-4" />
                       Progress
                     </span>
@@ -110,20 +113,30 @@ export default function InstructorDashboard() {
           transition={{ duration: 0.4, delay: classes.length * 0.1 }}
           whileHover={{ y: -5, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)" }}
         >
-          <Link href="/instructor/create-class">
-            <Card className="h-full border-dashed border-2 border-forest-200 bg-white/90 hover:bg-forest-50/90 transition-colors duration-300 cursor-pointer">
-              <CardContent className="flex flex-col items-center justify-center h-full py-12">
-                <div className="w-16 h-16 rounded-full bg-forest-100 flex items-center justify-center mb-4">
-                  <Plus className="h-8 w-8 text-forest-600" />
-                </div>
-                <h3 className="text-xl font-marcellus text-forest-700">Add New Class</h3>
-                <p className="text-forest-500 text-center mt-2 font-nunito">
-                  Create a new curriculum for your students
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setShowCreate(true)}
+            onKeyPress={e => { if (e.key === 'Enter') setShowCreate(true) }}
+            className="h-full border-dashed border-2 border-forest-200 bg-white/90 hover:bg-forest-50/90 transition-colors duration-300 cursor-pointer rounded-xl focus:outline-none focus:ring-2 focus:ring-forest-400"
+          >
+            <CardContent className="flex flex-col items-center justify-center h-full py-12">
+              <div className="w-16 h-16 rounded-full bg-forest-100 flex items-center justify-center mb-4">
+                <Plus className="h-8 w-8 text-forest-600" />
+              </div>
+              <h3 className="text-xl font-jakarta font-semibold text-forest-700">Add New Class</h3>
+              <p className="text-forest-500 text-center mt-2 font-inter">
+                Create a new curriculum for your students
+              </p>
+            </CardContent>
+          </div>
         </motion.div>
+
+        {/* Create Class Popup */}
+        <CreateClassPopup
+          open={showCreate}
+          onClose={() => setShowCreate(false)}
+        />
       </div>
     </div>
   )

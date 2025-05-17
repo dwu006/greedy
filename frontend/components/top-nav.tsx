@@ -29,12 +29,6 @@ export function TopNav({ userType }: { userType: "instructor" | "student" }) {
         </Link>
 
         <div className="ml-auto flex items-center gap-4">
-          <Link href="/">
-            <Button variant="ghost" size="icon">
-              <Home className="h-5 w-5 text-forest-500" />
-              <span className="sr-only">Home</span>
-            </Button>
-          </Link>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-10 w-10 rounded-full">

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import React, { use } from "react"
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -100,9 +101,26 @@ const classesData = {
   },
 }
 
+interface ClassData {
+  name: string
+  description: string
+  students: number
+  progress: number
+  startDate: string
+  endDate: string
+  topics: string[]
+  upcomingLessons: Array<{
+    title: string
+    date: string
+    time: string
+  }>
+}
+
 export default function ClassPage({ params }: { params: { className: string } }) {
   const [activeTab, setActiveTab] = useState("overview")
-  const classData = classesData[params.className]
+  // Extract className safely from params
+  const className = Array.isArray(params.className) ? params.className[0] : params.className
+  const classData = classesData[className as keyof typeof classesData] as ClassData | undefined
 
   // Fallback for when class data is not found
   if (!classData) {
@@ -242,7 +260,7 @@ export default function ClassPage({ params }: { params: { className: string } })
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 font-nunito">
-                    {classData.topics.map((topic, index) => (
+                    {classData.topics.map((topic: string, index: number) => (
                       <li key={index} className="flex items-center text-forest-600">
                         <div className="w-1.5 h-1.5 rounded-full bg-forest-400 mr-2"></div>
                         {topic}
@@ -268,7 +286,7 @@ export default function ClassPage({ params }: { params: { className: string } })
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4 font-nunito">
-                    {classData.upcomingLessons.map((lesson, index) => (
+                    {classData.upcomingLessons.map((lesson: { title: string; date: string; time: string }, index: number) => (
                       <div key={index} className="border-l-2 border-forest-300 pl-3 py-1">
                         <h4 className="font-medium text-forest-700">{lesson.title}</h4>
                         <p className="text-sm text-forest-600">
