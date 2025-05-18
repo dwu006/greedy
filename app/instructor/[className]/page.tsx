@@ -650,11 +650,9 @@ export default function ClassPage({ params }: { params: ClassParams }) {
                 </Button>
               </Link>
             </div>
-            <Link href={`/instructor/${classData.slug}/timeline`}>
-              <Button className="bg-amber-500 hover:bg-amber-600 text-white w-full">
-                <Pencil className="mr-2 h-4 w-4" /> Edit Timeline
-              </Button>
-            </Link>
+            <Button className="bg-amber-500 hover:bg-amber-600 text-white w-full">
+              <Pencil className="mr-2 h-4 w-4" /> Edit 
+            </Button>
           </div>
         </div>
       </motion.div>

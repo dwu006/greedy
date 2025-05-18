@@ -146,6 +146,22 @@ export function AssignmentBox({
           </div>
         </div>
         
+        {/* Priority Tag */}
+        {assignmentData.priority && (
+          <div className="mt-1 flex items-center">
+            <div 
+              className={`text-xs px-2 py-0.5 rounded-full font-medium ${assignmentData.priority === 'high' 
+                ? 'bg-red-100 text-red-700' 
+                : assignmentData.priority === 'medium' 
+                  ? 'bg-amber-100 text-amber-700' 
+                  : 'bg-green-100 text-green-700'
+              }`}
+            >
+              Priority: <span className="capitalize">{assignmentData.priority}</span>
+            </div>
+          </div>
+        )}
+        
         {/* Progress Bar */}
         <div 
           className="mt-2 relative"

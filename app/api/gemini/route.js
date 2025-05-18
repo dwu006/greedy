@@ -48,14 +48,23 @@ export async function POST(request) {
       for (const file of files) {
         if (file.size > 0) {
           const base64Data = await fileToBase64(file);
-          processedFiles.push({
+          const processedFile = {
             name: file.name,
             type: file.type,
             size: file.size,
             data: base64Data
-          });
+          };
+          
+          // For PDF files, keep the original file object too for analysis
+          if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+            // Store the original file for PDF processing
+            processedFile.originalFile = file;
+          }
+          
+          processedFiles.push(processedFile);
         }
       }
+      console.log(`Processed ${processedFiles.length} files for Gemini API`);
     }
     
     // Process message with Gemini, passing the selected assignment and all assignments

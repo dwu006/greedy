@@ -350,7 +350,7 @@ export default function CreateClassPopup({ open, onClose }: {
                 onClick={() => setActiveTab("syllabus")} 
                 className={`px-4 py-2 rounded-lg flex items-center gap-2 ${activeTab === "syllabus" ? "bg-blue-100 text-blue-700" : "bg-gray-50 text-gray-500"}`}
               >
-                <FileText className="h-4 w-4" /> Upload Syllabus
+                <FileText className="h-4 w-4" /> Upload
               </button>
             </div>
           </div>
@@ -479,7 +479,7 @@ export default function CreateClassPopup({ open, onClose }: {
                   {/* Enhanced Syllabus Upload Area with better drag and drop */}
                   <div className="space-y-4">
                     <Label className="font-jakarta font-medium text-forest-700">
-                      Upload Syllabus PDF <span className="text-red-500">*</span>
+                      Upload<span className="text-red-500">*</span>
                     </Label>
                     <div 
                       className={`relative flex flex-col items-center justify-center border-2 border-dashed ${

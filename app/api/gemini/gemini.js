@@ -231,15 +231,98 @@ const functionMap = {
     }
   },
   
-  createAssignment: (args) => {
-    // This function will be called when Gemini decides to create an assignment
-    // In a real implementation, you'd actually create the assignment in your database
-    console.log("Creating assignment with:", args);
-    return {
-      success: true,
-      assignmentDetails: args,
-      message: `Successfully created assignment: ${args.name}`
-    };
+  createAssignment: async (args, fileAttachments = []) => {
+    try {
+      // This function will be called when Gemini decides to create an assignment
+      console.log("Creating assignment with:", args);
+      
+      // Default priority if no PDF is analyzed
+      let priorityInfo = {
+        priority: 'medium',
+        priorityReason: 'Default priority assignment'
+      };
+      
+      // Check if we have PDF files to analyze for priority
+      if (Array.isArray(fileAttachments) && fileAttachments.length > 0) {
+        // Find the first PDF file
+        const pdfFile = fileAttachments.find(file => 
+          file.type === 'application/pdf' || 
+          (file.name && file.name.toLowerCase().endsWith('.pdf'))
+        );
+        
+        if (pdfFile) {
+          console.log("Found PDF attachment, analyzing for priority...");
+          try {
+            // Import the analyzePdfForPriority function - dynamic import for server component compatibility
+            const { analyzePdfForPriority } = await import('@/app/lib/assignmentPriority');
+            
+            // Convert file data to buffer if needed
+            let pdfBuffer;
+            
+            // Check for different possible formats of PDF data
+            if (pdfFile.data) {
+              // File already has base64 data (from our processedFiles)
+              pdfBuffer = Buffer.from(pdfFile.data, 'base64');
+              console.log("Using base64 data from processed file");
+            } else if (pdfFile.originalFile && pdfFile.originalFile.arrayBuffer) {
+              // File has originalFile with arrayBuffer method (from our route.js)
+              console.log("Using originalFile from processed file");
+              const arrayBuffer = await pdfFile.originalFile.arrayBuffer();
+              pdfBuffer = Buffer.from(arrayBuffer);
+            } else if (pdfFile.arrayBuffer) {
+              // File is a File object with arrayBuffer method
+              console.log("Using arrayBuffer directly from file");
+              const arrayBuffer = await pdfFile.arrayBuffer();
+              pdfBuffer = Buffer.from(arrayBuffer);
+            } else if (pdfFile.buffer || pdfFile instanceof Buffer) {
+              // File is already a buffer or has buffer property
+              pdfBuffer = pdfFile instanceof Buffer ? pdfFile : pdfFile.buffer;
+              console.log("File was already a buffer");
+            }
+            
+            if (pdfBuffer) {
+              console.log("PDF buffer created successfully, size:", pdfBuffer.length);
+              // Analyze PDF content for priority
+              const analysisResult = await analyzePdfForPriority(pdfBuffer);
+              console.log("PDF analysis result:", analysisResult);
+              
+              // Update priority info from analysis
+              priorityInfo = {
+                priority: analysisResult.priority || 'medium',
+                priorityReason: analysisResult.reason || 'Based on PDF content analysis'
+              };
+            } else {
+              console.log("Could not create PDF buffer for analysis");
+            }
+          } catch (analysisError) {
+            console.error("Error analyzing PDF for priority:", analysisError);
+            // Continue with default priority on error
+          }
+        }
+      }
+      
+      // Add priority information to assignment details
+      const assignmentWithPriority = {
+        ...args,
+        priority: priorityInfo.priority,
+        priorityReason: priorityInfo.priorityReason
+      };
+      
+      console.log("Final assignment with priority:", assignmentWithPriority);
+      
+      return {
+        success: true,
+        assignmentDetails: assignmentWithPriority,
+        message: `Successfully created ${priorityInfo.priority} priority assignment: ${args.name}`
+      };
+    } catch (error) {
+      console.error("Error in createAssignment:", error);
+      return {
+        success: false,
+        error: error.message,
+        message: `Error creating assignment: ${error.message}`
+      };
+    }
   },
   
   createClassCard: (args) => {
@@ -541,8 +624,27 @@ async function processMessage(message, files = [], selectedAssignment = null, al
             }
           }
           
-          // Execute the function with preserved dates
-          const functionResult = functionMap[functionName](functionArgs);
+          // Call the appropriate function based on name
+          let functionResult;
+          
+          if (functionName in functionMap) {
+            console.log(`Processing function call: ${functionName}`, functionArgs);
+            
+            // For createAssignment, pass the file attachments as well
+            if (functionName === 'createAssignment' && files && files.length > 0) {
+              console.log(`Passing ${files.length} files to createAssignment function`);
+              functionResult = await functionMap[functionName](functionArgs, files);
+            } else {
+              functionResult = await functionMap[functionName](functionArgs);
+            }
+          } else {
+            console.error(`Unknown function call: ${functionName}`);
+            functionResult = {
+              success: false,
+              error: `Unknown function: ${functionName}`
+            };
+          }
+          
           functionResults.push({
             name: functionName,
             result: functionResult

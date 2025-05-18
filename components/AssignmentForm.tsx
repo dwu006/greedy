@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { X } from "lucide-react";
 import { motion } from "framer-motion";
+import { useToast } from "@/components/ui/use-toast";
 
 export interface AssignmentData {
   id?: string; // Added ID field for assignment identification
@@ -16,6 +17,8 @@ export interface AssignmentData {
   description: string;
   files: File[];
   progress?: number; // Completion percentage (0-100)
+  priority?: string; // Low, medium, high based on analysis
+  priorityReason?: string; // Explanation for the priority level
 }
 
 interface AssignmentFormProps {
@@ -27,6 +30,7 @@ interface AssignmentFormProps {
 }
 
 export function AssignmentForm({ isOpen, onClose, onSave, initialData, isEditing = false }: AssignmentFormProps) {
+  const { toast } = useToast();
   const [formData, setFormData] = useState<AssignmentData>(initialData || {
     id: undefined, // Will be assigned when saving if it's a new assignment
     name: "",
@@ -35,9 +39,11 @@ export function AssignmentForm({ isOpen, onClose, onSave, initialData, isEditing
     description: "",
     files: [],
     progress: 0, // Default to 0% progress
+    priority: "medium", // Default priority
   });
   
   const [fileNames, setFileNames] = useState<string[]>([]);
+  const [analyzing, setAnalyzing] = useState<boolean>(false);
   
   // Update form data when initialData changes (when editing)
   useEffect(() => {
@@ -73,23 +79,104 @@ export function AssignmentForm({ isOpen, onClose, onSave, initialData, isEditing
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Analyze a PDF file to determine its priority level
+  const analyzePdfPriority = async (file: File) => {
+    if (file.type !== 'application/pdf') {
+      return { priority: 'medium', reason: 'Not a PDF file' };
+    }
+    
+    try {
+      setAnalyzing(true);
+      
+      // Create form data for API call
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      // Send to our API endpoint
+      const response = await fetch('/api/assignment/analyze-priority', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        return {
+          priority: result.priority,
+          reason: result.reason
+        };
+      } else {
+        throw new Error(result.error || 'Unknown error during analysis');
+      }
+    } catch (error) {
+      console.error('Error analyzing PDF:', error);
+      return { priority: 'medium', reason: 'Error analyzing content' };
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+  
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const selectedFiles = Array.from(e.target.files);
+      
+      // Store file names for display
+      const names = selectedFiles.map(file => file.name);
+      setFileNames(names);
+      
+      // Update form with files
       setFormData((prev) => ({
         ...prev,
         files: selectedFiles,
       }));
       
-      // Store file names for display
-      const names = selectedFiles.map(file => file.name);
-      setFileNames(names);
+      // Check if we have a PDF to analyze
+      const pdfFile = selectedFiles.find(file => file.type === 'application/pdf');
+      
+      if (pdfFile) {
+        toast({
+          title: "Analyzing attachment",
+          description: "Determining assignment priority based on content...",
+          duration: 3000,
+        });
+        
+        // Analyze PDF for priority
+        const priorityResult = await analyzePdfPriority(pdfFile);
+        
+        // Update form with priority information
+        setFormData((prev) => ({
+          ...prev,
+          priority: priorityResult.priority,
+          priorityReason: priorityResult.reason
+        }));
+        
+        // Notify user of the analysis result
+        toast({
+          title: "Priority Determined",
+          description: `Assignment set to ${priorityResult.priority} priority based on the content.`,
+          duration: 4000,
+        });
+      }
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    
+    // Ensure we include the priority information when saving
+    const finalFormData = {
+      ...formData,
+      // Use default priority if not determined through analysis
+      priority: formData.priority || 'medium',
+      priorityReason: formData.priorityReason || 'Default priority assignment' 
+    };
+    
+    onSave(finalFormData);
+    
     // Reset form
     setFormData({
       name: "",
@@ -98,7 +185,10 @@ export function AssignmentForm({ isOpen, onClose, onSave, initialData, isEditing
       description: "",
       files: [],
       progress: 0,
+      priority: "medium",
+      priorityReason: ""
     });
+    
     setFileNames([]);
   };
 
@@ -226,6 +316,41 @@ export function AssignmentForm({ isOpen, onClose, onSave, initialData, isEditing
               </div>
             </div>
             
+            {/* Priority Section */}
+            {formData.priority && (
+              <div className="space-y-2">
+                <Label className="font-medium text-forest-700">Assignment Priority</Label>
+                <div 
+                  className={`p-3 rounded-md flex items-center justify-between ${
+                    formData.priority === 'high' ? 'bg-red-50 border-l-4 border-red-500' :
+                    formData.priority === 'medium' ? 'bg-amber-50 border-l-4 border-amber-500' :
+                    'bg-green-50 border-l-4 border-green-500'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        formData.priority === 'high' ? 'bg-red-500' :
+                        formData.priority === 'medium' ? 'bg-amber-500' :
+                        'bg-green-500'
+                      }`} />
+                      <span className={`font-medium capitalize ${
+                        formData.priority === 'high' ? 'text-red-700' :
+                        formData.priority === 'medium' ? 'text-amber-700' :
+                        'text-green-700'
+                      }`}>
+                        {formData.priority} Priority
+                      </span>
+                    </div>
+                    {formData.priorityReason && (
+                      <p className="text-sm text-forest-600 mt-1 pl-4">{formData.priorityReason}</p>
+                    )}
+                  </div>
+                  {analyzing && <div className="text-sm text-forest-600">Analyzing PDF...</div>}
+                </div>
+              </div>
+            )}
+            
             {/* Separator */}
             <div className="border-t border-gray-200 my-1" />
 
@@ -262,20 +387,30 @@ export function AssignmentForm({ isOpen, onClose, onSave, initialData, isEditing
                     </ul>
                   </div>
                 )}
+                {analyzing && <div className="text-sm text-forest-600">Analyzing...</div>}
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="outline" className="border-forest-200 text-forest-700" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-forest-600 hover:bg-forest-700 text-white">
-                {isEditing ? "Update Assignment" : "Save Assignment"}
-              </Button>
-            </div>
-          </form>
-        </div>
-      </motion.div>
-    </div>
-  );
+          <div className="flex justify-end mt-8 space-x-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="border-gray-300 text-forest-700"
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              className="bg-forest-600 hover:bg-forest-700 text-white"
+              disabled={analyzing}
+            >
+              {isEditing ? "Update" : "Create"} Assignment
+            </Button>
+          </div>
+        </form>
+      </div>
+    </motion.div>
+  </div>
+);
 }
