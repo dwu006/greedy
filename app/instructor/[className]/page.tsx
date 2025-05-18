@@ -711,11 +711,6 @@ export default function ClassPage({ params }: { params: ClassParams }) {
                           )}
                           {classData.schedule.labSections && typeof classData.schedule.labSections === 'string' ? (
                             <p className="mb-1"><span className="font-medium">Lab Sections:</span> {classData.schedule.labSections}</p>
-                          ) : classData.schedule.labSections && typeof classData.schedule.labSections === 'object' ? (
-                            <p className="mb-1">
-                              <span className="font-medium">Lab Sections:</span> {' '}
-                              {classData.schedule.labSections.section} - {classData.schedule.labSections.days} {classData.schedule.labSections.time}
-                            </p>
                           ) : null}
                         </div>
                       ) : (

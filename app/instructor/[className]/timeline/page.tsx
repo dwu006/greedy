@@ -506,6 +506,7 @@ export default function TimelinePage() {
   }>>([]);
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [showAssignmentsInCalendar, setShowAssignmentsInCalendar] = useState(true);
   const [isAssignmentFormOpen, setIsAssignmentFormOpen] = useState(false);
   const [isEditingAssignment, setIsEditingAssignment] = useState(false);
   const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
