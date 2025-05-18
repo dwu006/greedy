@@ -226,28 +226,64 @@ export default function ClassPage({ params }: { params: { className: string } })
         
         let foundClass = null;
         
+        // Helper function to normalize slugs for comparison
+        const normalizeSlug = (slug: string) => {
+          // Handle special characters and URL encoding
+          return decodeURIComponent(slug)
+            .toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9-]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
+        };
+        
+        // Helper function to check if two slugs match after normalization
+        const slugsMatch = (slug1: string | undefined, slug2: string) => {
+          if (!slug1) return false;
+          return normalizeSlug(slug1) === normalizeSlug(slug2);
+        };
+        
+        // The URL slug might be URL encoded, so decode it for comparison
+        const decodedClassSlug = decodeURIComponent(classSlug);
+        console.log('Decoded class slug from URL:', decodedClassSlug);
+        
         if (storedClasses) {
           try {
             const classes = JSON.parse(storedClasses);
             console.log('Parsed classes from localStorage:', classes.length);
             
-            // Extra debugging for slugs
-            console.log('Available slugs:', classes.map((c: any) => c.slug).join(', '));
+            // Log all available classes for debugging
+            classes.forEach((cls: ClassData, index: number) => {
+              console.log(`Class ${index}: name=${cls.name}, slug=${cls.slug}`);
+            });
             
-            // First try exact match
+            // Try multiple matching strategies
+            // 1. Direct exact match
             foundClass = classes.find((cls: ClassData) => cls.slug === classSlug);
             
-            // If not found, try case-insensitive match
+            // 2. Case-insensitive match
             if (!foundClass) {
               foundClass = classes.find((cls: ClassData) => 
                 cls.slug && cls.slug.toLowerCase() === classSlug.toLowerCase()
               );
             }
             
-            // If still not found, try matching by name (converted to slug format)
+            // 3. URL-decoded match
             if (!foundClass) {
               foundClass = classes.find((cls: ClassData) => 
-                cls.name && cls.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === classSlug
+                cls.slug && cls.slug === decodedClassSlug
+              );
+            }
+            
+            // 4. Normalized slug match (most comprehensive)
+            if (!foundClass) {
+              foundClass = classes.find((cls: ClassData) => slugsMatch(cls.slug, classSlug));
+            }
+            
+            // 5. Match by name that would generate this slug
+            if (!foundClass) {
+              foundClass = classes.find((cls: ClassData) => 
+                cls.name && normalizeSlug(cls.name) === normalizeSlug(classSlug)
               );
             }
             
@@ -268,10 +304,10 @@ export default function ClassPage({ params }: { params: { className: string } })
           const data = await response.json();
           
           if (data.success) {
-            // Try multiple matching strategies
-            foundClass = data.classes.find((cls: ClassData) => cls.slug === classSlug) ||
-                        data.classes.find((cls: ClassData) => cls.slug && cls.slug.toLowerCase() === classSlug.toLowerCase()) ||
-                        data.classes.find((cls: ClassData) => cls.name && cls.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === classSlug);
+            // Use the same matching logic for API results
+            const normalizedSlug = normalizeSlug(classSlug);
+            foundClass = data.classes.find((cls: ClassData) => normalizeSlug(cls.slug || '') === normalizedSlug) ||
+                         data.classes.find((cls: ClassData) => cls.name && normalizeSlug(cls.name) === normalizedSlug);
           }
         }
         
