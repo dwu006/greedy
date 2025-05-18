@@ -116,6 +116,60 @@ function AIChatbot({ isOpen, onClose, width, onResize, onCreateAssignment, selec
         formData.append('selectedAssignment', JSON.stringify(selectedAssignment));
       }
       
+      // Define typings for timeline events and assignments for collection
+      interface TimelineEvent {
+        id: string;
+        position: { x: number; y: number };
+        assignmentData?: AssignmentData;
+        [key: string]: any;
+      }
+      
+      interface CollectedAssignment extends AssignmentData {
+        id: string;
+        className: string;
+        position: { x: number; y: number };
+      }
+      
+      // Collect all assignments from localStorage for recommendations
+      try {
+        // Collect all assignments from all classes for recommendation functionality
+        const allAssignments: CollectedAssignment[] = [];
+        
+        // Get all keys from localStorage
+        const keys = Object.keys(localStorage);
+        const timelineKeys = keys.filter(key => key.startsWith('timeline-events-'));
+        
+        // Extract assignments from all timeline events
+        timelineKeys.forEach(key => {
+          try {
+            const events = JSON.parse(localStorage.getItem(key) || '[]') as TimelineEvent[];
+            // Filter events that have assignment data
+            const assignmentEvents = events.filter((event): event is TimelineEvent & { assignmentData: AssignmentData } => 
+              !!event.assignmentData);
+            
+            // Add class name to each assignment for context
+            const className = key.replace('timeline-events-', '');
+            assignmentEvents.forEach((event: TimelineEvent) => {
+              if (event.assignmentData) {
+                allAssignments.push({
+                  id: event.id,
+                  className: className,
+                  ...event.assignmentData,
+                  position: event.position
+                });
+              }
+            });
+          } catch (error) {
+            console.error(`Error parsing timeline events from ${key}:`, error);
+          }
+        });
+        
+        console.log(`Sending ${allAssignments.length} assignments to Gemini for recommendation`);
+        formData.append('allAssignments', JSON.stringify(allAssignments));
+      } catch (error) {
+        console.error('Error collecting assignments from localStorage:', error);
+      }
+      
       // Call Gemini API
       const response = await fetch('/api/gemini', {
         method: 'POST',

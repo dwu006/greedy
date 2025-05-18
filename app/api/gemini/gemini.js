@@ -9,6 +9,21 @@ const API_KEY = process.env.GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(API_KEY);
 
 // Function schemas
+const recommendSchema = {
+  name: "recommend",
+  description: "Prioritizes assignments based on due dates, progress, and importance",
+  parameters: {
+    type: "object",
+    properties: {
+      currentDate: {
+        type: "string",
+        description: "The current date in YYYY-MM-DD format (defaults to today if not provided)"
+      }
+    },
+    required: []
+  }
+};
+
 const createAssignmentSchema = {
   name: "createAssignment",
   description: "Creates a new assignment on the timeline with provided details",
@@ -113,6 +128,109 @@ const deleteAssignmentSchema = {
 
 // Function implementations
 const functionMap = {
+  recommend: (args) => {
+    // This function prioritizes assignments based on due dates and progress
+    try {
+      // Get the current date from args or use today
+      const currentDate = args.currentDate || new Date().toISOString().split('T')[0];
+      const today = new Date(currentDate);
+      
+      // Get all assignments from the global assignments cache
+      // Note: In the actual implementation, assignments should be provided via the processMessage function
+      let allAssignments = global.cachedAssignments || [];
+      
+      if (allAssignments.length === 0) {
+        return {
+          success: true,
+          currentDate: currentDate,
+          totalAssignments: 0,
+          prioritizedAssignments: [],
+          message: "No assignments found to prioritize. Please create some assignments first."
+        };
+      }
+      
+      // Step 2: Calculate priority scores
+      const prioritizedAssignments = allAssignments.map(assignment => {
+        // Parse dates
+        const endDate = new Date(assignment.endDate);
+        const startDate = new Date(assignment.startDate);
+        
+        // Calculate days until due
+        const daysUntilDue = Math.max(0, Math.ceil((endDate - today) / (1000 * 60 * 60 * 24)));
+        
+        // Calculate progress factor (lower progress = higher priority)
+        const progressFactor = 1 - (assignment.progress || 0) / 100;
+        
+        // Calculate time factor (closer to due date = higher priority)
+        const timeFactorMax = 10; // Maximum priority for assignments due very soon
+        let timeFactor;
+        
+        if (daysUntilDue <= 0) {
+          // Overdue assignments get highest priority
+          timeFactor = timeFactorMax + 2;
+        } else if (daysUntilDue <= 1) {
+          // Due today or tomorrow
+          timeFactor = timeFactorMax;
+        } else if (daysUntilDue <= 3) {
+          // Due within 3 days
+          timeFactor = timeFactorMax - 2;
+        } else if (daysUntilDue <= 7) {
+          // Due within a week
+          timeFactor = timeFactorMax - 4;
+        } else {
+          // Due later
+          timeFactor = timeFactorMax - 6;
+        }
+        
+        // Calculate total priority score
+        const priorityScore = (timeFactor * 0.7) + (progressFactor * 0.3);
+        
+        // Determine priority category
+        let priorityCategory;
+        if (daysUntilDue <= 0) {
+          priorityCategory = "Overdue";
+        } else if (daysUntilDue <= 2) {
+          priorityCategory = "Urgent";
+        } else if (daysUntilDue <= 7) {
+          priorityCategory = "High";
+        } else if (daysUntilDue <= 14) {
+          priorityCategory = "Medium";
+        } else {
+          priorityCategory = "Low";
+        }
+        
+        return {
+          id: assignment.id,
+          name: assignment.name,
+          className: assignment.className,
+          dueDate: assignment.endDate,
+          daysUntilDue: daysUntilDue,
+          progress: assignment.progress || 0,
+          priorityScore,
+          priorityCategory
+        };
+      });
+      
+      // Sort by priority score (descending)
+      prioritizedAssignments.sort((a, b) => b.priorityScore - a.priorityScore);
+      
+      return {
+        success: true,
+        currentDate: currentDate,
+        totalAssignments: allAssignments.length,
+        prioritizedAssignments,
+        message: `Successfully prioritized ${prioritizedAssignments.length} assignments based on due dates and progress`
+      };
+    } catch (error) {
+      console.error("Error in recommend function:", error);
+      return {
+        success: false,
+        error: error.message,
+        message: "Failed to prioritize assignments due to an error"
+      };
+    }
+  },
+  
   createAssignment: (args) => {
     // This function will be called when Gemini decides to create an assignment
     // In a real implementation, you'd actually create the assignment in your database
@@ -165,10 +283,31 @@ async function getGeminiModel() {
       content: `You are an AI assistant for a teaching platform called Greedy. Your primary role is to help instructors manage their classes and assignments. Today's date is ${new Date().toISOString().split('T')[0]} (YYYY-MM-DD format).
       
 You can perform the following actions:
-1. CREATE assignments when users mention creating, adding, or making a new assignment/homework/project
-2. CREATE class cards when users mention creating, adding, or setting up a new class
-3. EDIT assignments when users mention updating, changing, or modifying an existing assignment
-4. DELETE assignments when users mention removing or deleting an assignment
+1. RECOMMEND and prioritize assignments based on due dates and progress (NEW FEATURE)
+2. CREATE assignments when users mention creating, adding, or making a new assignment/homework/project
+3. CREATE class cards when users mention creating, adding, or setting up a new class
+4. EDIT assignments when users mention updating, changing, or modifying an existing assignment
+5. DELETE assignments when users mention removing or deleting an assignment
+
+### RECOMMENDING AND PRIORITIZING ASSIGNMENTS
+When the user asks about which assignments they should focus on, prioritize, work on next, or needs to complete soon, IMMEDIATELY use the recommend function to provide a prioritized list of assignments.
+
+EXAMPLES:
+- If user says "Which assignments should I focus on?" → use recommend function
+- If user says "What's due soon?" → use recommend function
+- If user says "Help me prioritize my assignments" → use recommend function
+- If user says "What should I work on first?" → use recommend function
+
+The recommend function will:
+- Automatically retrieve all assignments from localStorage
+- Calculate priority scores based on due dates and progress
+- Return assignments categorized as Overdue, Urgent, High, Medium, or Low priority
+- Sort assignments by priority (highest first)
+
+When presenting the results:
+1. Always mention the priority category (Overdue, Urgent, High, Medium, Low)
+2. Include the assignment name, class, due date, and days remaining
+3. For overdue items, emphasize they need immediate attention
 
 ### CREATING CLASS CARDS
 When the user asks to create a class, immediately use the createClassCard function to add a new class card to the timeline.
@@ -280,17 +419,27 @@ REMEMBER:
         threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
       },
     ],
-    tools: [{ functionDeclarations: [createAssignmentSchema, createClassCardSchema, editAssignmentSchema, deleteAssignmentSchema] }]
+    tools: [{ functionDeclarations: [recommendSchema, createAssignmentSchema, createClassCardSchema, editAssignmentSchema, deleteAssignmentSchema] }]
   });
   
   return model;
 }
 
 // Process messages with the Gemini model
-async function processMessage(message, files = [], selectedAssignment = null) {
+async function processMessage(message, files = [], selectedAssignment = null, allAssignments = []) {
   try {
     const model = await getGeminiModel();
     let chat = model.startChat();
+    
+    // Cache all assignments for use by the recommend function
+    if (Array.isArray(allAssignments) && allAssignments.length > 0) {
+      global.cachedAssignments = allAssignments;
+      console.log(`Cached ${allAssignments.length} assignments for recommendation`); 
+    } else if (typeof localStorage !== 'undefined') {
+      // This will only execute in browser environments for testing
+      console.log('Attempting to gather assignments from localStorage for testing');
+      // We'll leave this empty as it won't execute in the API route
+    }
     
     // If there's a selected assignment, provide that context to Gemini first
     if (selectedAssignment) {
@@ -420,6 +569,50 @@ async function processMessage(message, files = [], selectedAssignment = null) {
   }
 }
 
+// Initialize a global variable to cache assignments between requests
+global.cachedAssignments = [];
+
+// Helper function to extract assignments from client-side data
+const extractAssignmentsFromClientData = (assignmentsData) => {
+  if (!assignmentsData || !Array.isArray(assignmentsData)) {
+    return [];
+  }
+  
+  return assignmentsData.map(assignment => ({
+    id: assignment.id || `assignment-${Date.now()}`,
+    name: assignment.name || 'Unnamed Assignment',
+    className: assignment.className || 'General',
+    startDate: assignment.startDate || new Date().toISOString().split('T')[0],
+    endDate: assignment.endDate || new Date().toISOString().split('T')[0],
+    description: assignment.description || '',
+    progress: assignment.progress || 0,
+    files: assignment.files || [],
+    position: assignment.position || { x: 0, y: 0 }
+  }));
+};
+
+// Update this function to correctly handle localStorage in browser environments
+const checkAssignmentPriorities = async (currentDate = null, assignmentsData = []) => {
+  try {
+    // Update the cached assignments if provided
+    if (assignmentsData && assignmentsData.length > 0) {
+      global.cachedAssignments = extractAssignmentsFromClientData(assignmentsData);
+    }
+    
+    // Call the recommend function with the current date
+    const result = functionMap.recommend({ currentDate: currentDate });
+    return result;
+  } catch (error) {
+    console.error("Error checking assignment priorities:", error);
+    return {
+      success: false,
+      error: error.message,
+      message: "Failed to check assignment priorities"
+    };
+  }
+};
+
 export {
-  processMessage
+  processMessage,
+  checkAssignmentPriorities
 };

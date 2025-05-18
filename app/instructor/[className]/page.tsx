@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Users, CalendarDays, BookOpen, Clock, ClipboardList, ArrowLeft, FileIcon } from "lucide-react"
+import { ChevronLeft, CalendarDays, FileText, Users, BookOpen, Clock, ArrowLeft, Pencil, ClipboardCheck, FileIcon } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 
 // Fallback data in case API fails
@@ -592,60 +592,67 @@ export default function ClassPage({ params }: { params: ClassParams }) {
               <p className="text-forest-600 mt-2 font-inter">{classData.description}</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button 
-              className="bg-forest-100 hover:bg-forest-200 text-forest-700 border border-forest-200"
-              onClick={() => {
-                // Create share message with class details
-                const shareText = `Join my class "${classData.name}" with code: ${classData.classCode}`;
-                
-                // Try to use Web Share API if available
-                if (navigator.share) {
-                  navigator.share({
-                    title: `Join ${classData.name}`,
-                    text: shareText,
-                  }).catch(error => {
-                    console.log('Error sharing', error);
-                    // Fallback to clipboard
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <Button 
+                className="bg-forest-100 hover:bg-forest-200 text-forest-700 border border-forest-200"
+                onClick={() => {
+                  // Create share message with class details
+                  const shareText = `Join my class "${classData.name}" with code: ${classData.classCode}`;
+                  
+                  // Try to use Web Share API if available
+                  if (navigator.share) {
+                    navigator.share({
+                      title: `Join ${classData.name}`,
+                      text: shareText,
+                    }).catch(error => {
+                      console.log('Error sharing', error);
+                      // Fallback to clipboard
+                      navigator.clipboard.writeText(shareText);
+                      toast({
+                        title: "Share Text Copied",
+                        description: "Invitation message copied to clipboard",
+                        duration: 2000,
+                      });
+                    });
+                  } else {
+                    // Fallback for browsers that don't support Web Share API
                     navigator.clipboard.writeText(shareText);
                     toast({
                       title: "Share Text Copied",
                       description: "Invitation message copied to clipboard",
                       duration: 2000,
                     });
-                  });
-                } else {
-                  // Fallback for browsers that don't support Web Share API
-                  navigator.clipboard.writeText(shareText);
-                  toast({
-                    title: "Share Text Copied",
-                    description: "Invitation message copied to clipboard",
-                    duration: 2000,
-                  });
-                }
-              }}
-            >
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                width="16" 
-                height="16" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                className="mr-2"
+                  }
+                }}
               >
-                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
-                <polyline points="16 6 12 2 8 6"></polyline>
-                <line x1="12" y1="2" x2="12" y2="15"></line>
-              </svg>
-              Share Class
-            </Button>
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  width="16" 
+                  height="16" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="2" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  className="mr-2"
+                >
+                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                  <polyline points="16 6 12 2 8 6"></polyline>
+                  <line x1="12" y1="2" x2="12" y2="15"></line>
+                </svg>
+                Share Class
+              </Button>
+              <Link href={`/instructor/${classData.slug}/timeline`}>
+                <Button className="bg-forest-500 hover:bg-forest-600 text-white">
+                  <CalendarDays className="mr-2 h-4 w-4" /> Timeline
+                </Button>
+              </Link>
+            </div>
             <Link href={`/instructor/${classData.slug}/timeline`}>
-              <Button className="bg-forest-500 hover:bg-forest-600 text-white">
-                <CalendarDays className="mr-2 h-4 w-4" /> Timeline
+              <Button className="bg-amber-500 hover:bg-amber-600 text-white w-full">
+                <Pencil className="mr-2 h-4 w-4" /> Edit Timeline
               </Button>
             </Link>
           </div>
@@ -801,7 +808,7 @@ export default function ClassPage({ params }: { params: ClassParams }) {
                 <Card className="bg-white/90">
                   <CardHeader>
                     <CardTitle className="font-jakarta text-forest-700 flex items-center">
-                      <ClipboardList className="mr-2 h-5 w-5 text-forest-500" />
+                      <ClipboardCheck className="mr-2 h-5 w-5 text-forest-500" />
                       Upcoming Lessons
                     </CardTitle>
                   </CardHeader>
@@ -955,7 +962,7 @@ export default function ClassPage({ params }: { params: ClassParams }) {
                                 </span>
                               </div>
                               <div className="flex items-center">
-                                <FileIcon className="h-4 w-4 mr-1 text-forest-500" />
+                                <FileText className="h-4 w-4 mr-1 text-forest-500" />
                                 <span>{assignment.assignmentData?.files?.length || 0} files</span>
                               </div>
                             </div>

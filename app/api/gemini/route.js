@@ -29,6 +29,18 @@ export async function POST(request) {
       }
     }
     
+    // Get all assignments for recommendation
+    let allAssignments = [];
+    const allAssignmentsRaw = formData.get('allAssignments');
+    if (allAssignmentsRaw) {
+      try {
+        allAssignments = JSON.parse(allAssignmentsRaw);
+        console.log(`Received ${allAssignments.length} assignments from client for recommendation`);
+      } catch (error) {
+        console.error('Error parsing allAssignments JSON:', error);
+      }
+    }
+    
     // Process files if present
     const processedFiles = [];
     
@@ -46,8 +58,8 @@ export async function POST(request) {
       }
     }
     
-    // Process message with Gemini, passing the selected assignment
-    const response = await processMessage(message, processedFiles, selectedAssignment);
+    // Process message with Gemini, passing the selected assignment and all assignments
+    const response = await processMessage(message, processedFiles, selectedAssignment, allAssignments);
     
     return NextResponse.json(response);
   } catch (error) {
