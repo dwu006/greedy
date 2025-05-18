@@ -1,7 +1,5 @@
 # Greedy
 
-![Greedy Logo](https://img.shields.io/badge/Greedy-Education%20Platform-forestgreen?style=for-the-badge)
-
 ## Why "Greedy"?
 
 This platform is named after the greedy algorithm paradigm in computer science - a problem-solving approach that makes locally optimal choices at each step with the aim of finding a global optimum. Just as greedy algorithms provide elegant solutions to complex problems through simple decision-making rules, our platform aims to streamline the educational experience with straightforward yet powerful tools.
