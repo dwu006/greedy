@@ -41,5 +41,9 @@ Next, TS, Tailwind, Shadcn, Framer, Gemini API, PDF-lib, Supabase, Vercel
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/your-username/greedy.git
+git clone https://github.com/dwu006/greedy.git
 cd greedy
+npm install
+npm run dev
+```
+Go to http://localhost:3000

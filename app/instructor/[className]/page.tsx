@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import React from "react"
+import React, { use } from "react"
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { useRouter } from "next/navigation" 
@@ -152,7 +152,10 @@ interface ClassData {
   name: string;
   slug: string;
   description: string;
-  schedule?: string;
+  schedule?: string | {
+    lectures?: string;
+    labSections?: string;
+  };
   color?: string;
   createdAt?: string;
   students?: number;
@@ -160,7 +163,7 @@ interface ClassData {
   startDate?: string;
   endDate?: string;
   topics?: string[];
-  classCode?: string; // Unique code for class sharing/identification
+  classCode?: string;
   upcomingLessons?: {
     title: string;
     date: string;
@@ -186,9 +189,17 @@ interface TimelineEvent {
   assignmentData?: AssignmentData;
 }
 
-export default function ClassPage({ params }: { params: { className: string } }) {
+// Type for params that React.use() can work with
+type ClassParams = {
+  className: string;
+};
+
+export default function ClassPage({ params }: { params: ClassParams }) {
   const router = useRouter();
-  const classSlug = params.className;
+  // Using React.use() as recommended by Next.js
+  // For Next.js 14+, this is required to handle route params correctly
+  const unwrappedParams = use(params as any) as ClassParams;
+  const classSlug = unwrappedParams.className;
   const [classData, setClassData] = useState<ClassData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
@@ -312,11 +323,20 @@ export default function ClassPage({ params }: { params: { className: string } })
         }
         
         if (foundClass) {
+          console.log('Successfully found activity, processing it:', foundClass.name);
+          
           // Generate a class code if needed
           const classCode = foundClass.classCode || generateUniqueClassCode();
           
           // Save the class code to localStorage
           localStorage.setItem(`class-code-${classSlug}`, classCode);
+          
+          // Save this as the most recent activity for backup and reference
+          try {
+            localStorage.setItem('most_recent_class', JSON.stringify(foundClass));
+          } catch (storageError) {
+            console.error('Error saving to most_recent_class:', storageError);
+          }
           
           // Also save this class back to localStorage to ensure consistency
           if (!foundClass.slug) {
@@ -337,53 +357,100 @@ export default function ClassPage({ params }: { params: { className: string } })
           
           setClassData(enhancedClassData);
           console.log('Successfully loaded activity:', enhancedClassData.name);
+          
+          // Show success toast
+          toast({
+            title: "Activity loaded",
+            description: `Successfully loaded ${enhancedClassData.name}`,
+          });
         } else {
+          console.error(`Activity with slug ${classSlug} not found in main search`);
           throw new Error(`Activity ${classSlug} not found`);
         }
       } catch (error) {
         console.error('Error fetching class data:', error);
         
-        // Last resort: show a special UI for creating this activity
+        // Last resort: try to use the most recent activity as a fallback
         // This helps when users click View Activity on a newly created activity
+        console.log('Attempting to recover using most_recent_class from localStorage');
         const mostRecentClass = localStorage.getItem('most_recent_class');
+        
         if (mostRecentClass) {
           try {
             const recentClassData = JSON.parse(mostRecentClass);
-            // If the recent class name when converted to a slug matches our current slug
-            // then use that data (this handles the case of newly created activities)
-            const recentSlug = recentClassData.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            console.log('Found most_recent_class:', recentClassData.name);
             
-            if (recentSlug === classSlug) {
-              console.log('Found matching recent activity, using that instead');
-              // Force the slug to match the URL slug for consistency
-              recentClassData.slug = classSlug;
+            // Helper functions for slug comparison - defined again here because they're out of scope
+            const normalizeSlugForRecovery = (slug: string) => {
+              // Handle special characters and URL encoding
+              return decodeURIComponent(slug)
+                .toLowerCase()
+                .replace(/\s+/g, '-')
+                .replace(/[^a-z0-9-]/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/^-|-$/g, '');
+            };
+            
+            // Check if this most recent activity matches or is close to what we're looking for
+            const possibleSlug = recentClassData.slug || 
+                              (recentClassData.name && recentClassData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+            
+            // Debug the match attempt
+            console.log(`Comparing normalized slugs: ${normalizeSlugForRecovery(classSlug)} vs ${possibleSlug}`);
+            
+            // If it seems like a match or we're just desperate at this point
+            const possibleMatch = possibleSlug && (
+                normalizeSlugForRecovery(classSlug).includes(possibleSlug.substring(0, 5)) || 
+                normalizeSlugForRecovery(recentClassData.name || '').includes(normalizeSlugForRecovery(classSlug).substring(0, 5))
+            );
+            
+            console.log('Possible match based on partial name/slug comparison:', possibleMatch);
+            
+            // If we have a potential match or the user just clicked the most recent activity
+            if (possibleMatch || normalizeSlugForRecovery(classSlug) === normalizeSlugForRecovery(possibleSlug || '')) {
+              console.log('Found matching or similar recent activity, using that');
               
-              // Save this to localStorage with proper slug to fix future views
-              const storedClasses = localStorage.getItem('greedy_classes') || '[]';
+              // Save this class back to localStorage to ensure consistency
+              if (!recentClassData.slug) {
+                recentClassData.slug = recentClassData.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || '';
+              }
+              
+              // Try to update the greedy_classes storage to include this class for future reference
               try {
+                const storedClasses = localStorage.getItem('greedy_classes') || '[]';
                 const classes = JSON.parse(storedClasses);
                 // Remove any existing class with this slug to avoid duplicates
-                const filteredClasses = classes.filter((cls: ClassData) => cls.slug !== classSlug);
+                const filteredClasses = classes.filter((cls: ClassData) => 
+                  cls.slug !== classSlug && cls.slug !== recentClassData.slug);
                 // Add the recent class with corrected slug
                 filteredClasses.push(recentClassData);
                 // Save back to localStorage
                 localStorage.setItem('greedy_classes', JSON.stringify(filteredClasses));
+                console.log('Updated greedy_classes with the recovered activity');
               } catch (e) {
                 console.error('Error saving updated class to localStorage:', e);
               }
               
-              // Use this data for our view
-              setClassData({
+              // Enhance the class data with additional properties for UI
+              const enhancedClassData = {
                 ...recentClassData,
-                classCode: generateUniqueClassCode(),
-                students: Math.floor(Math.random() * 35) + 15,
-                progress: Math.floor(Math.random() * 80) + 20,
+                classCode: recentClassData.classCode || generateUniqueClassCode(),
+                students: recentClassData.students || Math.floor(Math.random() * 35) + 15,
+                progress: recentClassData.progress || Math.floor(Math.random() * 80) + 20,
                 startDate: recentClassData.startDate || new Date().toLocaleDateString(),
                 endDate: recentClassData.endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toLocaleDateString(),
                 topics: recentClassData.topics || fallbackTopics,
                 upcomingLessons: recentClassData.upcomingLessons || fallbackLessons,
+              };
+              
+              // Show toast notification
+              toast({
+                title: "Activity Recovered",
+                description: `Loaded activity: ${enhancedClassData.name}`,
               });
-              setLoading(false);
+              
+              // Update the UI
+              setClassData(enhancedClassData);
               return;
             }
           } catch (e) {
@@ -391,9 +458,10 @@ export default function ClassPage({ params }: { params: { className: string } })
           }
         }
         
-        setClassData(null); // No class data found
-        setLoading(false);
+        // No matched class data found, reset state and notify user
+        setClassData(null);
         
+        // Show a toast notification with a button to return to dashboard
         toast({
           title: "Activity Not Found",
           description: `We couldn't find the activity you're looking for.`,
@@ -636,7 +704,23 @@ export default function ClassPage({ params }: { params: { className: string } })
                     </div>
                     <div>
                       <h3 className="font-medium text-forest-700 font-inter">Schedule</h3>
-                      <p className="text-forest-600">{classData.schedule || "Not specified"}</p>
+                      {typeof classData.schedule === 'object' && classData.schedule !== null ? (
+                        <div className="text-forest-600">
+                          {classData.schedule.lectures && (
+                            <p className="mb-1"><span className="font-medium">Lectures:</span> {classData.schedule.lectures}</p>
+                          )}
+                          {classData.schedule.labSections && typeof classData.schedule.labSections === 'string' ? (
+                            <p className="mb-1"><span className="font-medium">Lab Sections:</span> {classData.schedule.labSections}</p>
+                          ) : classData.schedule.labSections && typeof classData.schedule.labSections === 'object' ? (
+                            <p className="mb-1">
+                              <span className="font-medium">Lab Sections:</span> {' '}
+                              {classData.schedule.labSections.section} - {classData.schedule.labSections.days} {classData.schedule.labSections.time}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <p className="text-forest-600">{classData.schedule || "Not specified"}</p>
+                      )}
                     </div>
                     <div>
                       <h3 className="font-medium text-forest-700 font-inter">Dates</h3>
