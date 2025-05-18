@@ -20,12 +20,15 @@ interface ChatMessage {
   pending?: boolean;
 }
 
-function AIChatbot({ isOpen, onClose, width, onResize, onCreateAssignment }: { 
+function AIChatbot({ isOpen, onClose, width, onResize, onCreateAssignment, selectedAssignment, onEditAssignment, onDeleteAssignment }: { 
   isOpen: boolean; 
   onClose: () => void; 
   width: number;
   onResize: (newWidth: number) => void;
   onCreateAssignment: (assignmentData: AssignmentData, files: File[]) => void;
+  selectedAssignment?: AssignmentData; // Add selected assignment data
+  onEditAssignment?: (id: string, assignmentData: AssignmentData) => void; // Add edit handler
+  onDeleteAssignment?: (id: string) => void; // Add delete handler
 }) {
   const [message, setMessage] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -108,6 +111,11 @@ function AIChatbot({ isOpen, onClose, width, onResize, onCreateAssignment }: {
         formData.append('files', file);
       });
       
+      // If there's a selected assignment, include its details in the API call
+      if (selectedAssignment) {
+        formData.append('selectedAssignment', JSON.stringify(selectedAssignment));
+      }
+      
       // Call Gemini API
       const response = await fetch('/api/gemini', {
         method: 'POST',
@@ -134,12 +142,13 @@ function AIChatbot({ isOpen, onClose, width, onResize, onCreateAssignment }: {
           functionCall: data.functionCalls[0]
         }]);
         
-        // Check if createAssignment function was called
-        const createAssignmentCall = data.functionCalls.find(
-          (call: any) => call.name === 'createAssignment'
-        );
+        // Check for different function calls
+        const functionCall = data.functionCalls[0];
+        const functionName = functionCall?.name;
+        const functionArgs = functionCall?.args;
         
-        if (createAssignmentCall && data.functionResults) {
+        // Process based on the function type
+        if (functionName === 'createAssignment' && data.functionResults) {
           // Process the result of the function call
           const functionResult = data.functionResults.find(
             (result: any) => result.name === 'createAssignment'
@@ -171,6 +180,103 @@ function AIChatbot({ isOpen, onClose, width, onResize, onCreateAssignment }: {
             // Call the parent function to create the assignment
             onCreateAssignment(assignmentData, attachedFiles);
           }
+        }
+        // Handle editAssignment function calls
+        else if (functionName === 'editAssignment' && onEditAssignment) {
+          console.log("Editing assignment:", functionArgs);
+          
+          // Get the ID from the function args or use the selected assignment's ID
+          // This handles both cases: when Gemini returns the real ID and when it returns "selected-assignment"
+          let id = functionArgs.id;
+          
+          // Override the ID to use the selected assignment's ID directly
+          // This is the critical fix - ALWAYS use the assignment ID we passed, not the generic one
+          if (selectedAssignment?.id) {
+            // Logging for debugging
+            console.log("Function call original ID:", id);
+            console.log("Overriding with selected assignment ID:", selectedAssignment.id);
+            
+            // Always use the actual ID
+            id = selectedAssignment.id;
+          } else {
+            console.warn("No selected assignment ID available for edit operation");
+          }
+          
+          // Get the current assignment data if it exists, or create a new object
+          const currentAssignment = selectedAssignment || {
+            name: '',
+            startDate: '',
+            endDate: '',
+            description: '',
+            files: []
+          };
+          
+          // Helper function to ensure dates use the correct year (2025)
+          const fixDateYear = (dateString: string | undefined) => {
+            if (!dateString) return dateString;
+            
+            // Check if the date has the wrong year (not 2025)
+            if (dateString.includes('2024-') || dateString.includes('/2024')) {
+              return dateString.replace(/2024/g, '2025');
+            }
+            
+            return dateString;
+          };
+          
+          // Create a new assignment data object with the updated fields
+          const updatedAssignment: AssignmentData = {
+            ...currentAssignment,
+            // Update only the fields that were provided in the function args
+            name: functionArgs.name || currentAssignment.name,
+            startDate: fixDateYear(functionArgs.startDate) || currentAssignment.startDate,
+            endDate: fixDateYear(functionArgs.endDate) || currentAssignment.endDate,
+            description: functionArgs.description || currentAssignment.description
+          };
+          
+          console.log("Updated assignment with fixed dates:", updatedAssignment);
+          
+          // Add a message showing the result
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `I've updated the assignment for you.`,
+            timestamp: new Date(),
+            functionResult: { success: true }
+          }]);
+          
+          // Call the parent function to update the assignment
+          onEditAssignment(id, updatedAssignment);
+        }
+        // Handle deleteAssignment function calls
+        else if (functionName === 'deleteAssignment' && onDeleteAssignment) {
+          console.log("Deleting assignment:", functionArgs);
+          
+          // Get the ID from the function args or use the selected assignment's ID
+          // This handles both cases: when Gemini returns the real ID and when it returns "selected-assignment"
+          let id = functionArgs.id;
+          
+          // Override the ID to use the selected assignment's ID directly
+          // This is the critical fix - ALWAYS use the assignment ID we passed, not the generic one
+          if (selectedAssignment?.id) {
+            // Logging for debugging
+            console.log("Function call original ID for deletion:", id);
+            console.log("Overriding with selected assignment ID for deletion:", selectedAssignment.id);
+            
+            // Always use the actual ID
+            id = selectedAssignment.id;
+          } else {
+            console.warn("No selected assignment ID available for delete operation");
+          }
+          
+          // Add a message showing the result
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `I've deleted the assignment for you.`,
+            timestamp: new Date(),
+            functionResult: { success: true }
+          }]);
+          
+          // Call the parent function to delete the assignment
+          onDeleteAssignment(id);
         }
       } else {
         // Just add the text response if no function calls
@@ -508,7 +614,14 @@ export default function TimelinePage() {
       // Update existing assignment (keep its position)
       updatedTextBoxes = textBoxes.map(box => 
         box.id === editingAssignmentId 
-          ? { ...box, text: assignmentData.name, assignmentData }
+          ? { 
+              ...box, 
+              text: assignmentData.name, 
+              assignmentData: {
+                ...assignmentData,
+                id: editingAssignmentId // Make sure to preserve the ID
+              }
+            }
           : box
       );
       setTextBoxes(updatedTextBoxes);
@@ -520,11 +633,17 @@ export default function TimelinePage() {
       const newIndex = textBoxes.length;
       const { x, y } = calculateWavePosition(newIndex);
       
+      // Generate a unique ID for the new assignment
+      const newId = Date.now().toString();
+      
       const newBox = {
-        id: Date.now().toString(),
+        id: newId,
         text: assignmentData.name,
         position: { x, y },
-        assignmentData
+        assignmentData: {
+          ...assignmentData,
+          id: newId // Set the ID in the assignmentData too
+        }
       };
       
       updatedTextBoxes = [...textBoxes, newBox];
@@ -548,14 +667,22 @@ export default function TimelinePage() {
     const assignmentToEdit = textBoxes.find(box => box.id === id && box.assignmentData);
     if (assignmentToEdit && assignmentToEdit.assignmentData) {
       console.log("Editing assignment with ID:", id, assignmentToEdit.assignmentData.name);
+      
+      // Ensure the assignment data has the ID for the form
+      const assignmentDataWithId = {
+        ...assignmentToEdit.assignmentData,
+        id: id // Make sure ID is explicitly included
+      };
+      
+      // Set the editing state
       setEditingAssignmentId(id);
       setIsEditingAssignment(true);
       setIsAssignmentFormOpen(true);
       
-      // Show toast notification
+      // Show toast notification with ID information
       toast({
         title: "Editing Assignment",
-        description: `Now editing "${assignmentToEdit.assignmentData.name}"`,
+        description: `Now editing "${assignmentDataWithId.name}" (ID: ${id})`,
         duration: 3000,
       });
     } else {
@@ -892,17 +1019,89 @@ export default function TimelinePage() {
         onClose={() => setIsChatOpen(false)} 
         width={chatWidth}
         onResize={setChatWidth}
+        selectedAssignment={selectedBoxId ? (() => {
+          // Find the selected box
+          const selectedBox = textBoxes.find(box => box.id === selectedBoxId);
+          
+          // If no assignment data exists, create a minimal valid object
+          if (!selectedBox?.assignmentData) {
+            return {
+              id: selectedBoxId,
+              name: 'Untitled Assignment',
+              startDate: '',
+              endDate: '',
+              description: '',
+              files: []
+            };
+          }
+          
+          // Otherwise, ensure the ID is explicitly included
+          return {
+            ...selectedBox.assignmentData,
+            id: selectedBoxId // Always use the selected box ID directly
+          };
+        })() : undefined}
+        onEditAssignment={(id, updatedData) => {
+          // Update the assignment with the provided data
+          const updatedBoxes = textBoxes.map(box => 
+            box.id === id ? { 
+              ...box, 
+              text: updatedData.name, 
+              assignmentData: {
+                ...updatedData,
+                id // Make sure to preserve the ID
+              }
+            } : box
+          );
+          setTextBoxes(updatedBoxes);
+          localStorage.setItem(`timeline-events-${className}`, JSON.stringify(updatedBoxes));
+          
+          // Show a toast notification
+          toast({
+            title: "Assignment Updated",
+            description: `${updatedData.name} has been updated.`,
+            duration: 3000,
+          });
+        }}
+        onDeleteAssignment={(id) => {
+          // Get the assignment name before deletion for the toast message
+          const assignmentToDelete = textBoxes.find(box => box.id === id);
+          const assignmentName = assignmentToDelete?.assignmentData?.name || "Assignment";
+          
+          // Remove the assignment
+          const updatedBoxes = textBoxes.filter(box => box.id !== id);
+          setTextBoxes(updatedBoxes);
+          localStorage.setItem(`timeline-events-${className}`, JSON.stringify(updatedBoxes));
+          
+          // Clear the selected box ID if it was the deleted assignment
+          if (selectedBoxId === id) {
+            setSelectedBoxId(null);
+          }
+          
+          // Show a toast notification
+          toast({
+            title: "Assignment Deleted",
+            description: `${assignmentName} has been removed from the timeline.`,
+            duration: 3000,
+          });
+        }}
         onCreateAssignment={(assignmentData, uploadedFiles) => {
           // Calculate position based on how many assignments we have
           // Use the same wave position calculation as manual assignment creation
           const newIndex = textBoxes.length;
           const { x, y } = calculateWavePosition(newIndex);
           
+          // Generate a unique ID for the new assignment
+          const newId = Date.now().toString();
+          
           const newBox = {
-            id: Date.now().toString(),
+            id: newId,
             text: assignmentData.name,
             position: { x, y },
-            assignmentData
+            assignmentData: {
+              ...assignmentData,
+              id: newId // Ensure ID is included in assignmentData
+            }
           };
           
           const updatedBoxes = [...textBoxes, newBox];
@@ -930,7 +1129,19 @@ export default function TimelinePage() {
         }}
         onSave={handleSaveAssignment}
         initialData={isEditingAssignment && editingAssignmentId
-          ? textBoxes.find(box => box.id === editingAssignmentId)?.assignmentData
+          ? (() => {
+              // Get the existing assignment data
+              const existingData = textBoxes.find(box => box.id === editingAssignmentId)?.assignmentData;
+              
+              // Only create the object if we found the assignment data
+              if (existingData) {
+                return {
+                  ...existingData,
+                  id: editingAssignmentId // Explicitly include the ID
+                };
+              }
+              return undefined;
+            })()
           : undefined
         }
         isEditing={isEditingAssignment}

@@ -9,6 +9,7 @@ import { X } from "lucide-react";
 import { motion } from "framer-motion";
 
 export interface AssignmentData {
+  id?: string; // Added ID field for assignment identification
   name: string;
   startDate: string;
   endDate: string;
@@ -27,6 +28,7 @@ interface AssignmentFormProps {
 
 export function AssignmentForm({ isOpen, onClose, onSave, initialData, isEditing = false }: AssignmentFormProps) {
   const [formData, setFormData] = useState<AssignmentData>(initialData || {
+    id: undefined, // Will be assigned when saving if it's a new assignment
     name: "",
     startDate: "",
     endDate: "",

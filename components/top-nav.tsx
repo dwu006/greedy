@@ -1,6 +1,8 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { createClient } from "@/app/utils/supabase/client"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,10 +13,45 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { toast } from "@/components/ui/use-toast"
 import { motion } from "framer-motion"
 import { Home, Leaf } from "lucide-react"
 
 export function TopNav({ userType }: { userType: "instructor" | "student" }) {
+  const router = useRouter();
+  const supabase = createClient();
+
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        throw error;
+      }
+
+      // Preserving local data as requested by the user
+      // This keeps all your activities and data available after logout
+      
+      // Show success message
+      toast({
+        title: "Logged out successfully",
+        description: "You have been signed out of your account."
+      });
+      
+      // Redirect to home page
+      router.push('/');
+    } catch (error) {
+      console.error('Error logging out:', error);
+      toast({
+        title: "Logout failed",
+        description: "An error occurred while trying to log out. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+  
   return (
     <motion.div
       className="w-full border-b border-forest-100 bg-white/80 backdrop-blur-sm"
@@ -44,10 +81,8 @@ export function TopNav({ userType }: { userType: "instructor" | "student" }) {
               <DropdownMenuItem>Profile</DropdownMenuItem>
               <DropdownMenuItem>Settings</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <Link href="/" className="w-full">
-                  Log out
-                </Link>
+              <DropdownMenuItem onSelect={handleLogout}>
+                Log out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

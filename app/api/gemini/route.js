@@ -18,6 +18,17 @@ export async function POST(request) {
     const message = formData.get('message');
     const files = formData.getAll('files');
     
+    // Get the selected assignment data if present
+    let selectedAssignment = null;
+    const selectedAssignmentRaw = formData.get('selectedAssignment');
+    if (selectedAssignmentRaw) {
+      try {
+        selectedAssignment = JSON.parse(selectedAssignmentRaw);
+      } catch (error) {
+        console.error('Error parsing selectedAssignment JSON:', error);
+      }
+    }
+    
     // Process files if present
     const processedFiles = [];
     
@@ -35,8 +46,8 @@ export async function POST(request) {
       }
     }
     
-    // Process message with Gemini
-    const response = await processMessage(message, processedFiles);
+    // Process message with Gemini, passing the selected assignment
+    const response = await processMessage(message, processedFiles, selectedAssignment);
     
     return NextResponse.json(response);
   } catch (error) {

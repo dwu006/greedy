@@ -31,6 +31,7 @@ export default function CreateClassPopup({ open, onClose }: {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [createdClassId, setCreatedClassId] = useState<string | null>(null);
   
   // Form data for manual creation
   const [formData, setFormData] = useState({
@@ -146,27 +147,33 @@ export default function CreateClassPopup({ open, onClose }: {
   // Handle syllabus upload and processing
   const handleSyllabusUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!uploadedFile) {
       toast({
         title: "No file selected",
-        description: "Please select a syllabus PDF to upload",
+        description: "Please select a PDF syllabus file to upload",
         variant: "destructive"
       });
       return;
     }
     
     setIsSubmitting(true);
-    setUploadProgress(10); // Start progress
+    setUploadProgress(0); // Start progress at 0
     
     try {
-      // Create form data for file upload
+      // Create FormData object to send file
       const formData = new FormData();
       formData.append('file', uploadedFile);
       
-      setUploadProgress(30); // Update progress during upload prep
+      // Log the file details to console for debugging
+      console.log('Uploading file:', {
+        name: uploadedFile.name,
+        type: uploadedFile.type,
+        size: uploadedFile.size
+      });
       
-      // Call the syllabus API
+      setUploadProgress(30); // Update progress for preparing upload
+      
+      // Send request to API route
       const response = await fetch('/api/syllabus', {
         method: 'POST',
         body: formData
@@ -174,31 +181,117 @@ export default function CreateClassPopup({ open, onClose }: {
       
       setUploadProgress(70); // Update progress after upload
       
+      // Parse response
       const result = await response.json();
+      
+      // Check if the response isn't successful
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to process syllabus');
+      }
       
       setUploadProgress(100); // Complete progress
       
       if (result.success) {
-        // Show success message
+        // Store class in localStorage if the flag is set
+        if (result.storeLocally) {
+          try {
+            // Get existing classes or initialize empty array
+            let existingClasses = [];
+            const storedClasses = localStorage.getItem('greedy_classes');
+            if (storedClasses) {
+              existingClasses = JSON.parse(storedClasses);
+            }
+            
+            // Prepare class data with assignments and ensure proper slug format
+            const slug = result.class.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            const classData = {
+              ...result.class,
+              slug: slug,
+              assignments: result.assignments || [],
+              createdAt: new Date().toISOString()
+            };
+            
+            // Store the created class ID (which is now the slug) for navigation
+            // This slug will be used in the URL for viewing the activity
+            setCreatedClassId(slug);
+            console.log('Created activity with slug:', slug);
+            
+            // Add the new class
+            existingClasses.push(classData);
+            
+            // Store back in localStorage
+            localStorage.setItem('greedy_classes', JSON.stringify(existingClasses));
+            console.log('Class stored in localStorage successfully');
+            
+            // Also store as most recent class for easy access
+            localStorage.setItem('most_recent_class', JSON.stringify(classData));
+          } catch (error) {
+            console.error('Error storing class in localStorage:', error);
+          }
+        }
+        
+        // Show success message with links to view the activity
         toast({
-          title: "Class created from syllabus",
-          description: `${result.class.name} has been added to your classes with ${result.assignments?.length || 0} assignments.`,
-          action: <ToastAction altText="View Dashboard">View Dashboard</ToastAction>,
+          title: "Activity created successfully",
+          description: `${result.class.name} has been added to your activities with ${result.assignments?.length || 0} assignments.`,
+          action: (
+            <div className="flex gap-2">
+              <ToastAction 
+                altText="View Dashboard" 
+                onClick={() => window.location.href = "/instructor/dashboard"}
+              >
+                Dashboard
+              </ToastAction>
+            </div>
+          )
         });
         
-        // Refresh the page to show the new class card
-        window.location.reload();
+        // Redirect to dashboard after 1 second delay
+        setTimeout(() => {
+          window.location.href = "/instructor/dashboard";
+        }, 1000);
+        
+        // Don't refresh the page, stay on current view with buttons
       } else {
-        throw new Error(result.error || 'Failed to process syllabus');
+        // Handle API error
+        const errorMessage = result.error || 'Failed to process syllabus';
+        console.error('API error:', errorMessage);
+        toast({
+          title: "Error processing syllabus",
+          description: errorMessage,
+          variant: "destructive"
+        });
       }
     } catch (error) {
-      console.error('Error processing syllabus:', error);
+      setUploadProgress(0); // Reset progress on error
+      
+      // Check for specific error types
+      let errorMessage = 'An unknown error occurred during file upload';
+      
+      if (error instanceof Error) {
+        console.error('Upload error details:', error);
+        
+        // Handle file not found errors more gracefully
+        if (error.message.includes('ENOENT') || error.message.includes('no such file')) {
+          errorMessage = 'We encountered a server issue while processing your PDF. Our team has been notified.';
+          
+          // Log detailed error for debugging
+          console.error('PDF parsing error (ENOENT):', {
+            error: error.message,
+            file: uploadedFile.name,
+            stack: error.stack
+          });
+        } else {
+          errorMessage = `${error.message}. Please try again with a different PDF file.`;
+        }
+      }
+      
+      // Show toast notification with user-friendly message
       toast({
-        title: "Error processing syllabus",
-        description: error instanceof Error ? error.message : 'An unknown error occurred',
+        title: "Error uploading syllabus",
+        description: errorMessage,
         variant: "destructive"
       });
-      setUploadProgress(0); // Reset progress on error
     } finally {
       setIsSubmitting(false);
       onClose();
@@ -228,12 +321,12 @@ export default function CreateClassPopup({ open, onClose }: {
           <CardHeader>
             <div className="flex items-center gap-2">
               <CardTitle className="text-xl font-jakarta font-semibold text-forest-800 flex items-center gap-2">
-                Create New Class
+                Create New Activity
                 <Leaf className="h-6 w-6 text-forest-500 animate-leaf-sway" />
               </CardTitle>
             </div>
             <CardDescription className="font-inter text-forest-600 mt-2">
-              Create a class by filling in details or uploading a syllabus
+              Create a new activity by filling in details or uploading a pdf
             </CardDescription>
           </CardHeader>
           
@@ -270,7 +363,7 @@ export default function CreateClassPopup({ open, onClose }: {
                 <CardContent className="space-y-6">
                   <div className="space-y-2">
                     <Label htmlFor="name" className="font-jakarta font-medium text-forest-700">
-                      Class Name <span className="text-red-500">*</span>
+                      Activity Name <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       id="name"
@@ -298,7 +391,7 @@ export default function CreateClassPopup({ open, onClose }: {
 
                   <div className="space-y-2">
                     <Label htmlFor="schedule" className="font-jakarta font-medium text-forest-700">
-                      Class Schedule <span className="text-red-500">*</span>
+                      Activity Schedule <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       id="schedule"
@@ -374,12 +467,12 @@ export default function CreateClassPopup({ open, onClose }: {
               <form onSubmit={handleSyllabusUpload}>
                 <CardContent className="space-y-6">
                   <div className="text-center px-4 py-3 mb-4 bg-blue-50 text-blue-700 rounded-lg">
-                    <h4 className="text-sm font-bold mb-1">How Syllabus Upload Works:</h4>
+                    <h4 className="text-sm font-bold mb-1">How PDF Upload Works:</h4>
                     <ol className="text-sm font-inter text-left list-decimal pl-5 space-y-1">
-                      <li>Upload your class syllabus PDF (5MB max)</li>
-                      <li>Our AI extracts class name, schedule & details</li>
+                      <li>Upload your PDF</li>
+                      <li>Our AI extracts activity name, schedule & details</li>
                       <li>We automatically create assignments from due dates</li>
-                      <li>Your class is created with all extracted information</li>
+                      <li>Your activity is created with all extracted information</li>
                     </ol>
                   </div>
                   
@@ -444,10 +537,10 @@ export default function CreateClassPopup({ open, onClose }: {
                         <>
                           <Upload className="h-12 w-12 text-forest-400 mb-4" />
                           <span className="text-forest-600 font-medium font-inter mb-2">
-                            Drag & drop syllabus here or click to browse
+                            Drag & drop PDF here or click to browse
                           </span>
                           <span className="text-forest-500 text-sm font-inter">
-                            PDF file only, max 5MB
+                            PDF file only
                           </span>
                         </>
                       ) : (
@@ -484,7 +577,7 @@ export default function CreateClassPopup({ open, onClose }: {
                     
                     {/* Prominent instruction for upload */}
                     <div className="mt-2 text-center bg-blue-50 text-blue-700 p-2 rounded-md">
-                      <p className="text-sm">⬆️ Upload a syllabus PDF to create your class automatically</p>
+                      <p className="text-sm">⬆️ Upload a PDF to create your activity automatically</p>
                     </div>
                   </div>
                   
@@ -511,13 +604,31 @@ export default function CreateClassPopup({ open, onClose }: {
                   <Button type="button" variant="outline" className="border-forest-200 text-forest-700" onClick={onClose}>
                     Cancel
                   </Button>
-                  <Button 
-                    type="submit" 
-                    className="bg-forest-500 hover:bg-forest-600 text-white" 
-                    disabled={isSubmitting || !uploadedFile}
-                  >
-                    {isSubmitting ? "Processing..." : "Create from Syllabus"}
-                  </Button>
+                  {createdClassId ? (
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        className="border-forest-200 text-forest-700"
+                        onClick={() => window.location.href = `/instructor/${createdClassId}`}
+                      >
+                        View Activity
+                      </Button>
+                      <Button 
+                        className="bg-forest-500 hover:bg-forest-600 text-white"
+                        onClick={() => window.location.href = `/instructor/${createdClassId}/timeline`}
+                      >
+                        Timeline
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button 
+                      type="submit" 
+                      className="bg-forest-500 hover:bg-forest-600 text-white" 
+                      disabled={isSubmitting || !uploadedFile}
+                    >
+                      {isSubmitting ? "Processing..." : "Create from Syllabus"}
+                    </Button>
+                  )}
                 </CardFooter>
               </form>
             </TabsContent>

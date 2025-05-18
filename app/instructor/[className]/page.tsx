@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import React from "react"
 import { motion } from "framer-motion"
 import Link from "next/link"
+import { useRouter } from "next/navigation" 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -186,6 +187,7 @@ interface TimelineEvent {
 }
 
 export default function ClassPage({ params }: { params: { className: string } }) {
+  const router = useRouter();
   const classSlug = params.className;
   const [classData, setClassData] = useState<ClassData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -194,11 +196,13 @@ export default function ClassPage({ params }: { params: { className: string } })
 
   // Fetch assignments from localStorage
   useEffect(() => {
+    console.log('Looking for timeline events with slug:', classSlug);
     // Get timeline data from localStorage
     const timelineEventsJSON = localStorage.getItem(`timeline-events-${classSlug}`);
     if (timelineEventsJSON) {
       try {
         const events = JSON.parse(timelineEventsJSON);
+        console.log('Found timeline events:', events);
         // Filter only events that have assignment data
         const assignmentEvents = events.filter((event: TimelineEvent) => event.assignmentData);
         setAssignments(assignmentEvents);
@@ -206,56 +210,166 @@ export default function ClassPage({ params }: { params: { className: string } })
         console.error('Error parsing timeline data from localStorage:', error);
         setAssignments([]);
       }
+    } else {
+      console.log('No timeline events found for this activity yet');
     }
   }, [classSlug]);
 
   useEffect(() => {
     async function fetchClassData() {
       try {
-        // Check if we have a class code stored in localStorage
-        const storedClassCode = localStorage.getItem(`class-code-${classSlug}`);
+        console.log('Looking for activity with slug:', classSlug);
         
-        // First, try to fetch the class data from our API
-        const response = await fetch(`/api/class`);
-        const data = await response.json();
+        // CRITICAL: First check if we have the activity in localStorage
+        const storedClasses = localStorage.getItem('greedy_classes');
+        console.log('Stored classes found:', storedClasses ? 'yes' : 'no');
         
-        if (data.success) {
-          // Find the class with matching slug
-          const foundClass = data.classes.find((cls: ClassData) => cls.slug === classSlug);
-          
-          if (foundClass) {
-            // Use the stored class code, the existing one from API, or generate a new one
-            const classCode = foundClass.classCode || storedClassCode || generateUniqueClassCode();
+        let foundClass = null;
+        
+        if (storedClasses) {
+          try {
+            const classes = JSON.parse(storedClasses);
+            console.log('Parsed classes from localStorage:', classes.length);
             
-            // Save the class code to localStorage
-            localStorage.setItem(`class-code-${classSlug}`, classCode);
+            // Extra debugging for slugs
+            console.log('Available slugs:', classes.map((c: any) => c.slug).join(', '));
             
-            // Enhance the class data with additional properties for UI
-            setClassData({
-              ...foundClass,
-              classCode, // Include the class code
-              students: foundClass.students || Math.floor(Math.random() * 35) + 15,
-              progress: foundClass.progress || Math.floor(Math.random() * 80) + 20,
-              startDate: foundClass.startDate || new Date().toLocaleDateString(),
-              endDate: foundClass.endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-              topics: foundClass.topics || fallbackTopics,
-              upcomingLessons: foundClass.upcomingLessons || fallbackLessons,
-            });
-          } else {
-            throw new Error(`Class ${classSlug} not found`);
+            // First try exact match
+            foundClass = classes.find((cls: ClassData) => cls.slug === classSlug);
+            
+            // If not found, try case-insensitive match
+            if (!foundClass) {
+              foundClass = classes.find((cls: ClassData) => 
+                cls.slug && cls.slug.toLowerCase() === classSlug.toLowerCase()
+              );
+            }
+            
+            // If still not found, try matching by name (converted to slug format)
+            if (!foundClass) {
+              foundClass = classes.find((cls: ClassData) => 
+                cls.name && cls.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === classSlug
+              );
+            }
+            
+            console.log('Found class in localStorage:', foundClass ? 'yes' : 'no');
+            if (foundClass) {
+              console.log('Found class details:', foundClass.name);
+            }
+          } catch (error) {
+            console.error('Error parsing classes from localStorage:', error);
           }
+        }
+        
+        // If not found in localStorage, try the API
+        if (!foundClass) {
+          console.log('Class not found in localStorage, trying API...');
+          // Try to fetch the class data from our API
+          const response = await fetch(`/api/class`);
+          const data = await response.json();
+          
+          if (data.success) {
+            // Try multiple matching strategies
+            foundClass = data.classes.find((cls: ClassData) => cls.slug === classSlug) ||
+                        data.classes.find((cls: ClassData) => cls.slug && cls.slug.toLowerCase() === classSlug.toLowerCase()) ||
+                        data.classes.find((cls: ClassData) => cls.name && cls.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === classSlug);
+          }
+        }
+        
+        if (foundClass) {
+          // Generate a class code if needed
+          const classCode = foundClass.classCode || generateUniqueClassCode();
+          
+          // Save the class code to localStorage
+          localStorage.setItem(`class-code-${classSlug}`, classCode);
+          
+          // Also save this class back to localStorage to ensure consistency
+          if (!foundClass.slug) {
+            foundClass.slug = foundClass.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          }
+          
+          // Enhance the class data with additional properties for UI
+          const enhancedClassData = {
+            ...foundClass,
+            classCode, // Include the class code
+            students: foundClass.students || Math.floor(Math.random() * 35) + 15,
+            progress: foundClass.progress || Math.floor(Math.random() * 80) + 20,
+            startDate: foundClass.startDate || new Date().toLocaleDateString(),
+            endDate: foundClass.endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toLocaleDateString(),
+            topics: foundClass.topics || fallbackTopics,
+            upcomingLessons: foundClass.upcomingLessons || fallbackLessons,
+          };
+          
+          setClassData(enhancedClassData);
+          console.log('Successfully loaded activity:', enhancedClassData.name);
         } else {
-          throw new Error(data.error || 'Failed to fetch class data');
+          throw new Error(`Activity ${classSlug} not found`);
         }
       } catch (error) {
         console.error('Error fetching class data:', error);
+        
+        // Last resort: show a special UI for creating this activity
+        // This helps when users click View Activity on a newly created activity
+        const mostRecentClass = localStorage.getItem('most_recent_class');
+        if (mostRecentClass) {
+          try {
+            const recentClassData = JSON.parse(mostRecentClass);
+            // If the recent class name when converted to a slug matches our current slug
+            // then use that data (this handles the case of newly created activities)
+            const recentSlug = recentClassData.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            
+            if (recentSlug === classSlug) {
+              console.log('Found matching recent activity, using that instead');
+              // Force the slug to match the URL slug for consistency
+              recentClassData.slug = classSlug;
+              
+              // Save this to localStorage with proper slug to fix future views
+              const storedClasses = localStorage.getItem('greedy_classes') || '[]';
+              try {
+                const classes = JSON.parse(storedClasses);
+                // Remove any existing class with this slug to avoid duplicates
+                const filteredClasses = classes.filter((cls: ClassData) => cls.slug !== classSlug);
+                // Add the recent class with corrected slug
+                filteredClasses.push(recentClassData);
+                // Save back to localStorage
+                localStorage.setItem('greedy_classes', JSON.stringify(filteredClasses));
+              } catch (e) {
+                console.error('Error saving updated class to localStorage:', e);
+              }
+              
+              // Use this data for our view
+              setClassData({
+                ...recentClassData,
+                classCode: generateUniqueClassCode(),
+                students: Math.floor(Math.random() * 35) + 15,
+                progress: Math.floor(Math.random() * 80) + 20,
+                startDate: recentClassData.startDate || new Date().toLocaleDateString(),
+                endDate: recentClassData.endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toLocaleDateString(),
+                topics: recentClassData.topics || fallbackTopics,
+                upcomingLessons: recentClassData.upcomingLessons || fallbackLessons,
+              });
+              setLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.error('Error parsing most recent class:', e);
+          }
+        }
+        
+        setClassData(null); // No class data found
+        setLoading(false);
+        
         toast({
-          title: "Error loading class",
-          description: error instanceof Error ? error.message : 'An unknown error occurred',
-          variant: "destructive"
+          title: "Activity Not Found",
+          description: `We couldn't find the activity you're looking for.`,
+          variant: "destructive",
+          action: (
+            <Button onClick={() => router.push('/instructor/dashboard')} variant="outline" size="sm">
+              Return to Dashboard
+            </Button>
+          )
         });
-        // Set to null to show error state
-        setClassData(null);
+        
+        return;
       } finally {
         setLoading(false);
       }
@@ -709,34 +823,6 @@ export default function ClassPage({ params }: { params: { className: string } })
                     ? `Showing ${assignments.length} assignment${assignments.length !== 1 ? 's' : ''} from your timeline` 
                     : "Manage course assignments, homework, and projects here"}
                 </CardDescription>
-                
-                {/* Class code in assignments tab */}
-                <div className="mt-3 flex items-center justify-between border border-forest-100 bg-forest-50/60 p-3 rounded-lg">
-                  <div>
-                    <h4 className="text-sm font-medium text-forest-700">Class Code</h4>
-                    <p className="text-xs text-forest-600 mt-0.5">Students need this code to access assignments</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <code className="bg-white px-3 py-1.5 rounded font-mono text-forest-700 border border-forest-200 text-base">
-                      {classData.classCode}
-                    </code>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="border-forest-200 text-forest-700 hover:bg-forest-100"
-                      onClick={() => {
-                        navigator.clipboard.writeText(classData.classCode || '');
-                        toast({
-                          title: "Code Copied",
-                          description: "Class code copied to clipboard",
-                          duration: 2000,
-                        });
-                      }}
-                    >
-                      Copy
-                    </Button>
-                  </div>
-                </div>
               </CardHeader>
               <CardContent>
                 {assignments.length > 0 ? (

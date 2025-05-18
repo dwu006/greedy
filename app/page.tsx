@@ -27,39 +27,28 @@ export default function LandingPage() {
             <h1 className="text-5xl md:text-7xl font-marcellus text-forest-800 tracking-tight">Greedy</h1>
           </div>
           <h2 className="text-xl md:text-2xl font-nunito text-forest-600 max-w-2xl">
-            Smart Curriculum Scheduler for Instructors and Students
+            Learning Optimized
           </h2>
+          <p className="text-xl md:text-2xl font-nunito text-forest-600 max-w-2xl">
+            Built for Classes, Projects, and Teams
+          </p>
         </motion.div>
 
-        <div className="flex flex-col md:flex-row gap-6 w-full max-w-2xl">
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
-            className="flex-1"
-          >
-            <Link href="/auth/login?userType=instructor">
-              <div className="h-full bg-white/70 backdrop-blur-sm rounded-lg p-8 flex flex-col items-center justify-center text-center shadow-lg shadow-forest-100/50 hover:shadow-xl hover:shadow-forest-200/50 transition-all duration-300 hover:translate-y-[-4px] cursor-pointer border border-forest-100">
-                <h3 className="text-xl font-marcellus text-forest-700 mb-2">I'm an Instructor</h3>
-                <p className="text-forest-600 font-nunito">Manage your curriculum and schedule</p>
-              </div>
-            </Link>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.5, ease: "easeOut" }}
-            className="flex-1"
-          >
-            <Link href="/auth/login?userType=student">
-              <div className="h-full bg-white/70 backdrop-blur-sm rounded-lg p-8 flex flex-col items-center justify-center text-center shadow-lg shadow-leaf-100/50 hover:shadow-xl hover:shadow-leaf-200/50 transition-all duration-300 hover:translate-y-[-4px] cursor-pointer border border-leaf-100">
-                <h3 className="text-xl font-marcellus text-forest-700 mb-2">I'm a Student</h3>
-                <p className="text-forest-600 font-nunito">View your schedule and progress</p>
-              </div>
-            </Link>
-          </motion.div>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
+          className="w-full max-w-md mx-auto mt-8"
+        >
+          <Link href="/auth/login">
+            <div className="bg-forest-500 hover:bg-forest-600 text-white rounded-lg py-4 px-8 flex items-center justify-center text-center shadow-lg shadow-forest-300/50 hover:shadow-xl hover:shadow-forest-400/50 transition-all duration-300 hover:translate-y-[-4px] cursor-pointer">
+              <span className="text-xl font-marcellus mr-2">Get Started</span>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </div>
+          </Link>
+        </motion.div>
 
         <motion.div
           initial={{ opacity: 0 }}

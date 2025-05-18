@@ -50,8 +50,15 @@ export async function POST(request) {
     const fileBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(fileBuffer);
 
+    // Log file details for debugging
+    console.log('Processing PDF upload:', {
+      filename: file.name,
+      size: file.size,
+      type: file.type,
+      bufferLength: buffer.length
+    });
+
     // Process syllabus with Gemini AI
-    console.log('Processing syllabus file:', file.name);
     const result = await createClassFromSyllabus(buffer);
 
     if (result.success) {
@@ -59,15 +66,39 @@ export async function POST(request) {
         success: true,
         class: result.class,
         assignments: result.assignments,
+        storeLocally: true,
         message: `Successfully created class: ${result.class.name}`
       });
     } else {
-      throw new Error(result.error || 'Failed to create class from syllabus');
+      console.error('Syllabus creation failed:', result.error);
+      return NextResponse.json({
+        success: false,
+        error: result.error || 'Failed to create class from syllabus'
+      }, { status: 500 });
     }
   } catch (error) {
-    console.error('Error processing syllabus:', error);
+    // Provide detailed error information for debugging
+    console.error('Error processing syllabus:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code
+    });
+    
+    // Return a user-friendly error message
     return NextResponse.json(
-      { success: false, error: error.message },
+      { 
+        success: false, 
+        error: error.code === 'ENOENT' 
+          ? 'PDF parsing error: The system could not access a required file. This is an internal server error, not an issue with your PDF.'
+          : `PDF processing error: ${error.message || 'Unknown error'}`,
+        // Include technical details in development environment only
+        details: process.env.NODE_ENV === 'development' ? {
+          name: error.name,
+          code: error.code,
+          stack: error.stack
+        } : undefined
+      },
       { status: 500 }
     );
   }

@@ -22,8 +22,9 @@ function LoginContent() {
   const [googleLoading, setGoogleLoading] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const userType = searchParams.get("userType") || "instructor" // Default to instructor if not specified
   const errorMessage = searchParams.get("error")
+  // Universal login - everyone uses the same dashboard now
+  const userType = "instructor"
   
   const supabase = createClient()
   
@@ -32,20 +33,8 @@ function LoginContent() {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
-        // User is already logged in, get their metadata
-        const { data: { user } } = await supabase.auth.getUser()
-        // Prioritize the URL parameter over stored metadata
-        // This allows users to change between instructor/student views
-        const targetUserType = userType || user?.user_metadata?.user_type || 'student'
-        
-        // If the selected user type differs from stored type, update the metadata
-        if (userType && userType !== user?.user_metadata?.user_type) {
-          await supabase.auth.updateUser({
-            data: { user_type: userType }
-          })
-        }
-        
-        router.push(`/${targetUserType}/dashboard`)
+        // User is already logged in, redirect to dashboard
+        router.push('/instructor/dashboard')
       }
     }
     
@@ -70,7 +59,6 @@ function LoginContent() {
         password,
         options: {
           data: {
-            user_type: userType, // Store user type in metadata
             name: name
           }
         }
@@ -78,8 +66,8 @@ function LoginContent() {
       
       if (error) throw error
       
-      // Redirect to dashboard based on user type
-      router.push(`/${userType}/dashboard`)
+      // Redirect to dashboard
+      router.push('/instructor/dashboard')
     } catch (error: any) {
       setError(error.message || "Failed to sign up")
     } finally {
@@ -100,7 +88,7 @@ function LoginContent() {
             access_type: 'offline',
             prompt: 'consent',
           },
-          redirectTo: `${window.location.origin}/auth/callback?userType=${userType}`
+          redirectTo: `${window.location.origin}/auth/callback`
         }
       })
       
@@ -128,12 +116,12 @@ function LoginContent() {
       // After sign-in, update user metadata with the selected user type
       if (data?.user) {
         await supabase.auth.updateUser({
-          data: { user_type: userType }
+          data: { user_type: 'instructor' }
         })
       }
       
-      // Redirect to dashboard based on user type from URL parameter
-      router.push(`/${userType}/dashboard`)
+      // Redirect to dashboard
+      router.push('/instructor/dashboard')
     } catch (error: any) {
       setError(error.message || "Failed to sign in")
     } finally {
@@ -160,7 +148,7 @@ function LoginContent() {
             <h1 className="text-4xl font-marcellus text-forest-800 tracking-tight">Greedy</h1>
           </Link>
           <h2 className="text-xl font-nunito text-forest-600">
-            {userType === "instructor" ? "Instructor" : "Student"} Access
+            Account Access
           </h2>
         </motion.div>
         
@@ -293,7 +281,7 @@ function LoginContent() {
                 </div>
                 
                 <div className="text-sm text-forest-600 mt-2">
-                  <p>Creating an account as: <span className="font-semibold text-forest-800 capitalize">{userType}</span></p>
+                  <p>Creating your Greedy account</p>
                 </div>
                 
                 {error && (

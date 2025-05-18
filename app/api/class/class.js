@@ -26,7 +26,7 @@ const classes = [
 function createClass(classData) {
   const newClass = {
     id: `class-${classes.length + 1}`,
-    slug: classData.name.toLowerCase().replace(/\s+/g, '-'),
+    slug: classData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
     createdAt: new Date().toISOString().split('T')[0],
     ...classData
   };
@@ -37,6 +37,20 @@ function createClass(classData) {
 
 // Get all classes
 function getAllClasses() {
+  // Check localStorage first if we're in a browser environment
+  if (typeof window !== 'undefined') {
+    try {
+      const storedClasses = localStorage.getItem('greedy_classes');
+      if (storedClasses) {
+        console.log('Retrieved classes from localStorage');
+        return JSON.parse(storedClasses);
+      }
+    } catch (error) {
+      console.error('Error retrieving classes from localStorage:', error);
+    }
+  }
+  
+  // Fall back to the sample data if no localStorage or error
   return [...classes];
 }
 
