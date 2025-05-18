@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion"
 import Link from "next/link"
+import Image from "next/image"
 import { BackgroundBlobs } from "@/components/background-blobs"
 import { Leaf } from "lucide-react"
 
@@ -25,6 +26,16 @@ export default function LandingPage() {
               <Leaf className="h-10 w-10 text-forest-500" />
             </motion.div>
             <h1 className="text-5xl md:text-7xl font-marcellus text-forest-800 tracking-tight">Greedy</h1>
+          </div>
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <p className="text-sm md:text-base font-nunito text-forest-600 italic">An Technovation Project</p>
+            <Image 
+              src="/image.png" 
+              alt="Technovation Logo" 
+              width={20} 
+              height={20} 
+              className="object-contain"
+            />
           </div>
           <h2 className="text-xl md:text-2xl font-nunito text-forest-600 max-w-2xl">
             Learning Optimized
